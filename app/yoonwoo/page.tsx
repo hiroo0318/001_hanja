@@ -1,0 +1,4 @@
+import Link from "next/link";
+import { getChildRounds } from "@/lib/db";
+export const dynamic = "force-dynamic";
+export default async function YoonwooPage() { const rounds = await getChildRounds(); return <main className="shell"><nav className="nav"><Link className="brand" href="/">漢 한자 차수 시험</Link><Link className="back" href="/">처음으로</Link></nav><p className="eyebrow">윤우 시험</p><h1 className="page-title">어떤 차수를<br />풀어 볼까?</h1><p className="sub">한자를 보고 뜻과 음을 큰 소리로 말해 보세요.</p>{rounds.length === 0 ? <p className="empty">엄마가 먼저 시험 차수를 만들어 줄 거예요.</p> : rounds.map((round)=><Link className="round-card" key={round.id} href={`/yoonwoo/${round.id}`}><div className="round-top"><span className="round-title">{round.title}</span><span className="badge">{round.status === "completed" ? "다시 풀기" : "시작하기"}</span></div><div className="round-meta"><span>{round.questionCount}문항</span><span>{round.timer_seconds ? `${round.timer_seconds/60}분` : "시간 제한 없음"}</span></div></Link>)}</main>; }
