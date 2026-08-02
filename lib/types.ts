@@ -9,7 +9,7 @@ export type RoundSummary = {
   created_at: string;
   grade: { name: string; code: string };
   questionCount: number;
-  score: { correct: number; checked: number };
+  score: { correct: number; incorrect: number; checked: number };
 };
 
 export type MomRound = RoundSummary & {
@@ -29,5 +29,13 @@ export type ChildRound = {
   status: "ready" | "in_progress" | "completed";
   gradeName: string;
   currentPosition: number;
+  questionCount: number;
+  reviewIncorrect: boolean;
   items: Array<{ id: string; position: number; glyph: string }>;
+};
+
+export type StudyGrade = {
+  id: string;
+  name: string;
+  items: Array<{ id: string; position: number; glyph: string; meaning: string; reading: string }>;
 };

@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import type { ChildRound, Grade, MomRound, RoundSummary } from "@/lib/types";
+import type { ChildRound, Grade, MomRound, RoundSummary, StudyGrade } from "@/lib/types";
 
 function client() {
   const url = process.env.SUPABASE_URL;
@@ -22,10 +22,14 @@ export async function getGrades(): Promise<Grade[]> {
 async function scoreForRound(roundId: string) {
   const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
   fail(attemptError);
-  if (!attempt) return { correct: 0, checked: 0 };
+  if (!attempt) return { correct: 0, incorrect: 0, checked: 0 };
   const { data, error } = await client().from("exam_answers").select("result").eq("attempt_id", attempt.id).not("result", "is", null);
   fail(error);
-  return { correct: (data ?? []).filter((answer) => answer.result === "correct").length, checked: (data ?? []).length };
+  return {
+    correct: (data ?? []).filter((answer) => answer.result === "correct").length,
+    incorrect: (data ?? []).filter((answer) => answer.result === "incorrect").length,
+    checked: (data ?? []).length,
+  };
 }
 
 export async function getRoundSummaries(): Promise<RoundSummary[]> {
@@ -82,23 +86,52 @@ export async function getMomRound(roundId: string): Promise<MomRound | null> {
 }
 
 export async function getChildRounds() {
-  const rounds = await getRoundSummaries();
-  return rounds.map(({ score, ...round }) => round);
+  return getRoundSummaries();
 }
 
-export async function getChildRound(roundId: string): Promise<ChildRound | null> {
+export async function getStudyGrade(gradeId: string): Promise<StudyGrade | null> {
+  const { data: grade, error } = await client()
+    .from("grades")
+    .select("id,name,items:grade_question_items(id,source_position,character:characters(glyph,meaning,reading))")
+    .eq("id", gradeId)
+    .maybeSingle();
+  fail(error);
+  if (!grade) return null;
+  return {
+    id: grade.id,
+    name: grade.name,
+    items: [...(grade.items ?? [])]
+      .sort((a: any, b: any) => a.source_position - b.source_position)
+      .map((item: any) => ({ id: item.id, position: item.source_position, ...item.character })),
+  };
+}
+
+export async function getChildRound(roundId: string, reviewIncorrect = false): Promise<ChildRound | null> {
   const { data: round, error } = await client()
     .from("exam_rounds")
     .select("id,title,timer_seconds,status,grade:grades(name),items:exam_round_items(id,position,character:characters(glyph))")
     .eq("id", roundId).maybeSingle();
   fail(error);
   if (!round) return null;
-  const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("current_position").eq("round_id", roundId).maybeSingle();
+  const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("id,current_position").eq("round_id", roundId).maybeSingle();
   fail(attemptError);
+  const { data: answers, error: answersError } = attempt
+    ? await client().from("exam_answers").select("round_item_id,result").eq("attempt_id", attempt.id)
+    : { data: [], error: null };
+  fail(answersError);
+  const resultByItemId = new Map((answers ?? []).map((answer: any) => [answer.round_item_id, answer.result]));
+  const allItems = [...(round.items as any[])]
+    .sort((a, b) => a.position - b.position)
+    .map((item) => ({ id: item.id, position: item.position, glyph: item.character.glyph, result: resultByItemId.get(item.id) }));
+  const items = reviewIncorrect ? allItems.filter((item) => item.result === "incorrect") : allItems;
+  if (items.length === 0) return null;
   return {
     id: round.id, title: round.title, timer_seconds: round.timer_seconds, status: round.status,
-    gradeName: (Array.isArray(round.grade) ? round.grade[0] : round.grade as any).name, currentPosition: round.status === "completed" ? 1 : attempt?.current_position ?? 1,
-    items: [...(round.items as any[])].sort((a, b) => a.position - b.position).map((item) => ({ id: item.id, position: item.position, glyph: item.character.glyph })),
+    gradeName: (Array.isArray(round.grade) ? round.grade[0] : round.grade as any).name,
+    currentPosition: reviewIncorrect || round.status === "completed" ? items[0].position : attempt?.current_position ?? items[0].position,
+    questionCount: allItems.length,
+    reviewIncorrect,
+    items: items.map(({ id, position, glyph }) => ({ id, position, glyph })),
   };
 }
 
