@@ -22,20 +22,22 @@ export async function getGrades(): Promise<Grade[]> {
 async function scoreForRound(roundId: string) {
   const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
   fail(attemptError);
-  if (!attempt) return { correct: 0, incorrect: 0, checked: 0 };
-  const { data, error } = await client().from("exam_answers").select("result").eq("attempt_id", attempt.id).not("result", "is", null);
+  if (!attempt) return { correct: 0, incorrect: 0, checked: 0, gradedAt: null };
+  const { data, error } = await client().from("exam_answers").select("result,checked_at").eq("attempt_id", attempt.id).not("result", "is", null);
   fail(error);
   return {
     correct: (data ?? []).filter((answer) => answer.result === "correct").length,
     incorrect: (data ?? []).filter((answer) => answer.result === "incorrect").length,
     checked: (data ?? []).length,
+    gradedAt: (data ?? []).reduce<string | null>((latest, answer: any) => !answer.checked_at || (latest && latest > answer.checked_at) ? latest : answer.checked_at, null),
   };
 }
 
-export async function getRoundSummaries(): Promise<RoundSummary[]> {
+export async function getRoundSummaries(hidden = false): Promise<RoundSummary[]> {
   const { data: rounds, error } = await client()
     .from("exam_rounds")
     .select("id,title,round_number,status,timer_seconds,created_at,grade:grades(name,code),items:exam_round_items(id)")
+    .eq("is_hidden", hidden)
     .order("created_at", { ascending: false });
   fail(error);
   return Promise.all((rounds ?? []).map(async (round: any) => ({
@@ -89,6 +91,15 @@ export async function getChildRounds() {
   return getRoundSummaries();
 }
 
+export async function setRoundVisibility(roundIds: string[], hidden: boolean) {
+  if (roundIds.length === 0) return;
+  const { error } = await client()
+    .from("exam_rounds")
+    .update({ is_hidden: hidden, hidden_at: hidden ? new Date().toISOString() : null })
+    .in("id", roundIds);
+  fail(error);
+}
+
 export async function getStudyGrade(gradeId: string): Promise<StudyGrade | null> {
   const { data: grade, error } = await client()
     .from("grades")
@@ -109,10 +120,10 @@ export async function getStudyGrade(gradeId: string): Promise<StudyGrade | null>
 export async function getChildRound(roundId: string, reviewIncorrect = false): Promise<ChildRound | null> {
   const { data: round, error } = await client()
     .from("exam_rounds")
-    .select("id,title,timer_seconds,status,grade:grades(name),items:exam_round_items(id,position,character:characters(glyph))")
+    .select("id,title,timer_seconds,status,is_hidden,grade:grades(name),items:exam_round_items(id,position,character:characters(glyph))")
     .eq("id", roundId).maybeSingle();
   fail(error);
-  if (!round) return null;
+  if (!round || round.is_hidden) return null;
   const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("id,current_position").eq("round_id", roundId).maybeSingle();
   fail(attemptError);
   const { data: answers, error: answersError } = attempt

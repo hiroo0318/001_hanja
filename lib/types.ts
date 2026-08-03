@@ -9,7 +9,7 @@ export type RoundSummary = {
   created_at: string;
   grade: { name: string; code: string };
   questionCount: number;
-  score: { correct: number; incorrect: number; checked: number };
+  score: { correct: number; incorrect: number; checked: number; gradedAt: string | null };
 };
 
 export type MomRound = RoundSummary & {
