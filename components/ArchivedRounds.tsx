@@ -14,6 +14,7 @@ export function ArchivedRounds({ rounds }: { rounds: RoundSummary[] }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -21,6 +22,14 @@ export function ArchivedRounds({ rounds }: { rounds: RoundSummary[] }) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [open]);
+
+  useEffect(() => {
+    if (!restoring || rounds.some((round) => selected.includes(round.id))) return;
+    setOpen(false);
+    setSelected([]);
+    setPending(false);
+    setRestoring(false);
+  }, [restoring, rounds, selected]);
 
   function toggle(roundId: string) {
     setSelected((current) => current.includes(roundId) ? current.filter((id) => id !== roundId) : [...current, roundId]);
@@ -36,15 +45,31 @@ export function ArchivedRounds({ rounds }: { rounds: RoundSummary[] }) {
         body: JSON.stringify({ roundIds: selected, hidden: false }),
       });
       if (!response.ok) throw new Error((await response.json()).error ?? "재노출하지 못했습니다.");
-      setOpen(false);
-      setSelected([]);
+      setRestoring(true);
       router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "재노출하지 못했습니다.");
-    } finally {
       setPending(false);
     }
   }
 
-  return <><button className="secondary archive-trigger" type="button" onClick={() => setOpen(true)}>지난 차수 보기</button>{open && <div className="modal-backdrop" role="presentation"><section className="archive-modal" role="dialog" aria-modal="true" aria-labelledby="archive-title"><div className="modal-header"><div><p className="eyebrow">엄마 전용</p><h2 id="archive-title">지난 차수</h2><p className="modal-description">다시 시험볼 차수를 선택해 목록으로 되돌릴 수 있어요.</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label="닫기">×</button></div>{rounds.length === 0 ? <p className="empty">비노출 처리한 차수가 없어요.</p> : <div className="archive-list">{rounds.map((round) => { const isSelected = selected.includes(round.id); return <div className={`archive-row${isSelected ? " is-selected" : ""}`} key={round.id} role="button" tabIndex={0} aria-pressed={isSelected} onClick={() => toggle(round.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(round.id); } }}><span className="archive-info"><strong>{round.title}</strong><small className="archive-meta"><span>생성일 {dateText(round.created_at)}</span><span>채점일 {dateText(round.score.gradedAt)}</span><span>최종 점수 {round.score.correct}/{round.questionCount}</span></small></span></div>; })}</div>}<div className="modal-actions"><button className="secondary" type="button" onClick={() => setOpen(false)}>닫기</button><button className="primary" type="button" onClick={restore} disabled={pending || !selected.length}>{pending ? "처리 중…" : `선택 차수 재시험${selected.length ? ` (${selected.length})` : ""}`}</button></div></section></div>}</>;
+  function close() {
+    if (!pending && !restoring) setOpen(false);
+  }
+
+  return <>
+    <button className="secondary archive-trigger" type="button" onClick={() => setOpen(true)}>지난 차수 보기</button>
+    {open && <div className="modal-backdrop" role="presentation">
+      <section className="archive-modal" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+        <div className="modal-header">
+          <div><p className="eyebrow">엄마 전용</p><h2 id="archive-title">지난 차수</h2><p className="modal-description">다시 시험볼 차수를 선택해 목록으로 되돌릴 수 있어요.</p></div>
+          <button className="modal-close" type="button" onClick={close} disabled={pending || restoring} aria-label="닫기">×</button>
+        </div>
+        {restoring ? <div className="modal-loading" aria-live="polite"><i /><strong>차수를 다시 노출하고 있어요.</strong><p>잠시만 기다려 주세요.</p></div> : <>
+          {rounds.length === 0 ? <p className="empty">비노출 처리한 차수가 없어요.</p> : <div className="archive-list">{rounds.map((round) => { const isSelected = selected.includes(round.id); return <div className={`archive-row${isSelected ? " is-selected" : ""}`} key={round.id} role="button" tabIndex={0} aria-pressed={isSelected} onClick={() => toggle(round.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(round.id); } }}><span className="archive-info"><strong>{round.title}</strong><small className="archive-meta"><span>생성일 {dateText(round.created_at)}</span><span>채점일 {dateText(round.score.gradedAt)}</span><span>최종 점수 {round.score.correct}/{round.questionCount}</span></small></span></div>; })}</div>}
+          <div className="modal-actions"><button className="secondary" type="button" onClick={close} disabled={pending}>닫기</button><button className="primary" type="button" onClick={restore} disabled={pending || !selected.length}>{pending ? "처리 중…" : `선택 차수 재시험${selected.length ? ` (${selected.length})` : ""}`}</button></div>
+        </>}
+      </section>
+    </div>}
+  </>;
 }
