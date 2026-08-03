@@ -42,7 +42,7 @@ export function ExamPlayer({ round }: { round: ChildRound }) {
       }
     }
     void loadMark();
-    const interval = window.setInterval(loadMark, 1500);
+    const interval = window.setInterval(loadMark, 500);
     return () => { active = false; window.clearInterval(interval); };
   }, [round.id, item.id]);
 

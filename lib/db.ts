@@ -148,31 +148,17 @@ export async function getChildRound(roundId: string, reviewIncorrect = false, re
 }
 
 export async function getChildItemResult(roundId: string, roundItemId: string) {
-  const db = client();
-  const { data: round, error: roundError } = await db.from("exam_rounds").select("is_hidden").eq("id", roundId).maybeSingle();
-  fail(roundError);
-  if (!round || round.is_hidden) return null;
-  const { data: item, error: itemError } = await db
-    .from("exam_round_items")
-    .select("id,character:characters(meaning,reading)")
-    .eq("id", roundItemId)
-    .eq("round_id", roundId)
-    .maybeSingle();
-  fail(itemError);
-  if (!item) return null;
-  const { data: attempt, error: attemptError } = await db.from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
-  fail(attemptError);
-  if (!attempt) return { result: null };
-  const { data: answer, error: answerError } = await db
-    .from("exam_answers")
-    .select("result")
-    .eq("attempt_id", attempt.id)
-    .eq("round_item_id", roundItemId)
-    .maybeSingle();
-  fail(answerError);
-  if (answer?.result !== "incorrect") return { result: answer?.result ?? null };
-  const character = Array.isArray(item.character) ? item.character[0] : item.character as any;
-  return { result: "incorrect" as const, meaning: character.meaning, reading: character.reading };
+  const { data, error } = await client().rpc("get_child_item_result", {
+    requested_round_id: roundId,
+    requested_round_item_id: roundItemId,
+  }).maybeSingle();
+  fail(error);
+  if (!data) return null;
+  const itemResult = data as { result: "correct" | "incorrect" | null; meaning: string | null; reading: string | null };
+  return {
+    result: itemResult.result,
+    ...(itemResult.result === "incorrect" ? { meaning: itemResult.meaning ?? "", reading: itemResult.reading ?? "" } : {}),
+  };
 }
 
 export async function saveProgress(roundId: string, position: number, completed: boolean) {
