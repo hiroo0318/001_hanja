@@ -196,3 +196,12 @@ export async function markAnswer(roundId: string, roundItemId: string, result: "
   const { error } = await db.from("exam_answers").upsert({ attempt_id: attempt.id, round_item_id: roundItemId, result, checked_at: new Date().toISOString() }, { onConflict: "attempt_id,round_item_id" });
   fail(error);
 }
+
+export async function resetRoundAnswers(roundId: string) {
+  const db = client();
+  const { data: attempt, error: attemptError } = await db.from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
+  fail(attemptError);
+  if (!attempt) return;
+  const { error } = await db.from("exam_answers").delete().eq("attempt_id", attempt.id);
+  fail(error);
+}

@@ -72,8 +72,9 @@ export function ExamPlayer({ round }: { round: ChildRound }) {
   return <main className="exam">
     <div className="exam-head exam-nav"><span className="exam-nav-title">{round.reviewIncorrect ? "틀린 문제 다시 풀기" : round.title}</span>{remaining !== null && <span className="timer">⏱ {timeText(remaining)}</span>}<a className="back" href="/yoonwoo/exam">← 목록으로</a></div>
     <div className="progress"><i style={{ width: `${progress}%` }} /></div>
-    <div className="exam-head question-head"><span>문제 {item.position} / {round.questionCount}</span><span className={`mark-feedback ${mark.result ?? ""}`}>{mark.result === "correct" ? "○ 맞음" : mark.result === "incorrect" ? "× 틀림" : ""}</span><span>{round.reviewIncorrect ? `${index + 1}번째 틀린 문제` : "뜻과 음을 말해 보세요"}</span></div>
+    <div className="exam-head question-head"><span>문제 {item.position} / {round.questionCount}</span><span>{round.reviewIncorrect ? `${index + 1}번째 틀린 문제` : "뜻과 음을 말해 보세요"}</span></div>
     <div className="hanja-card">
+      {mark.result && <div className={`card-mark-feedback ${mark.result}`}><strong>{mark.result === "correct" ? "정답" : "틀림"}</strong></div>}
       <span className="glyph">{item.glyph}</span>
       {mark.result === "incorrect" && <div className="exam-answer-area">{showAnswer && <strong>{formatMeaningReading(mark.meaning ?? "", mark.reading ?? "")}</strong>}<button className="answer-button" onClick={() => setShowAnswer((value) => !value)}>{showAnswer ? "정답 가리기" : "정답 보기"}</button></div>}
     </div>
