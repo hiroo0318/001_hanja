@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RoundSummary } from "@/lib/types";
 
@@ -14,6 +14,13 @@ export function ArchivedRounds({ rounds }: { rounds: RoundSummary[] }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [open]);
 
   function toggle(roundId: string) {
     setSelected((current) => current.includes(roundId) ? current.filter((id) => id !== roundId) : [...current, roundId]);
