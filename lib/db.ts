@@ -22,7 +22,7 @@ export async function getGrades(): Promise<Grade[]> {
 async function scoreForRound(roundId: string) {
   const { data: attempt, error: attemptError } = await client().from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
   fail(attemptError);
-  if (!attempt) return { correct: 0, incorrect: 0, checked: 0, gradedAt: null };
+  if (!attempt) return { correct: 0, incorrect: 0, checked: 0, gradedAt: null, hasAttempt: false };
   const { data, error } = await client().from("exam_answers").select("result,checked_at").eq("attempt_id", attempt.id).not("result", "is", null);
   fail(error);
   return {
@@ -30,6 +30,7 @@ async function scoreForRound(roundId: string) {
     incorrect: (data ?? []).filter((answer) => answer.result === "incorrect").length,
     checked: (data ?? []).length,
     gradedAt: (data ?? []).reduce<string | null>((latest, answer: any) => !answer.checked_at || (latest && latest > answer.checked_at) ? latest : answer.checked_at, null),
+    hasAttempt: true,
   };
 }
 
@@ -117,7 +118,7 @@ export async function getStudyGrade(gradeId: string): Promise<StudyGrade | null>
   };
 }
 
-export async function getChildRound(roundId: string, reviewIncorrect = false): Promise<ChildRound | null> {
+export async function getChildRound(roundId: string, reviewIncorrect = false, restart = false): Promise<ChildRound | null> {
   const { data: round, error } = await client()
     .from("exam_rounds")
     .select("id,title,timer_seconds,status,is_hidden,grade:grades(name),items:exam_round_items(id,position,character:characters(glyph))")
@@ -139,11 +140,39 @@ export async function getChildRound(roundId: string, reviewIncorrect = false): P
   return {
     id: round.id, title: round.title, timer_seconds: round.timer_seconds, status: round.status,
     gradeName: (Array.isArray(round.grade) ? round.grade[0] : round.grade as any).name,
-    currentPosition: reviewIncorrect || round.status === "completed" ? items[0].position : attempt?.current_position ?? items[0].position,
+    currentPosition: restart || reviewIncorrect || round.status === "completed" ? items[0].position : attempt?.current_position ?? items[0].position,
     questionCount: allItems.length,
     reviewIncorrect,
     items: items.map(({ id, position, glyph }) => ({ id, position, glyph })),
   };
+}
+
+export async function getChildItemResult(roundId: string, roundItemId: string) {
+  const db = client();
+  const { data: round, error: roundError } = await db.from("exam_rounds").select("is_hidden").eq("id", roundId).maybeSingle();
+  fail(roundError);
+  if (!round || round.is_hidden) return null;
+  const { data: item, error: itemError } = await db
+    .from("exam_round_items")
+    .select("id,character:characters(meaning,reading)")
+    .eq("id", roundItemId)
+    .eq("round_id", roundId)
+    .maybeSingle();
+  fail(itemError);
+  if (!item) return null;
+  const { data: attempt, error: attemptError } = await db.from("exam_attempts").select("id").eq("round_id", roundId).maybeSingle();
+  fail(attemptError);
+  if (!attempt) return { result: null };
+  const { data: answer, error: answerError } = await db
+    .from("exam_answers")
+    .select("result")
+    .eq("attempt_id", attempt.id)
+    .eq("round_item_id", roundItemId)
+    .maybeSingle();
+  fail(answerError);
+  if (answer?.result !== "incorrect") return { result: answer?.result ?? null };
+  const character = Array.isArray(item.character) ? item.character[0] : item.character as any;
+  return { result: "incorrect" as const, meaning: character.meaning, reading: character.reading };
 }
 
 export async function saveProgress(roundId: string, position: number, completed: boolean) {
