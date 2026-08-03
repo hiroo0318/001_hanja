@@ -19,7 +19,6 @@ export function RoundCompletionButton({ roundId }: { roundId: string }) {
       router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "처리하지 못했습니다.");
-    } finally {
       setPending(false);
     }
   }
